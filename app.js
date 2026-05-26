@@ -1,27 +1,12 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { 
-    getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
-    sendEmailVerification, signOut, updatePassword, deleteUser, onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential 
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { 
-    getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove 
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+// Mengimport Supabase JS Client dari CDN resmi
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-// Konfigurasi Firebase Anda
-const firebaseConfig = {
-  apiKey: "AIzaSyADSn6Gsu8iOPtS7utA7eJaXYAmhjGC-Fw",
-  authDomain: "imel-permana.firebaseapp.com",
-  databaseURL: "https://imel-permana-default-rtdb.firebaseio.com",
-  projectId: "imel-permana",
-  storageBucket: "imel-permana.firebasestorage.app",
-  messagingSenderId: "92007832224",
-  appId: "1:92007832224:web:263452aa7bf09f040c87c5"
-};
+// Kredensial Proyek Supabase Anda (Ganti dengan milik Anda sendiri)
+const SUPABASE_URL = 'https://vvhdhngtpadjpnlgntpx.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2aGRobmd0cGFkanBubGdudHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MDI2MTUsImV4cCI6MjA5NTM3ODYxNX0.w3bKxtkQHkNC_mEcCrUT-uZKR144LAUwpwUF_56M7Qo';
 
-// Inisialisasi Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Inisialisasi Klien Supabase
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Global Variables
 let currentUser = null;
@@ -33,7 +18,6 @@ function clearRegisterInputs() {
     document.getElementById('regEmail').value = "";
     document.getElementById('regPassword').value = "";
     document.getElementById('regConfirmPassword').value = "";
-    // Reset indikator peraturan password ke default (merah/silang)
     updateRuleUI('ruleLength', false);
     updateRuleUI('ruleCaps', false);
     updateRuleUI('ruleSymbol', false);
@@ -51,25 +35,18 @@ function clearLoginInputs() {
 window.openModal = function(id) { document.getElementById(id).classList.remove('hidden'); }
 window.closeModal = function(id) { document.getElementById(id).classList.add('hidden'); }
 
-// Autentikasi Menggunakan State Listener
-onAuthStateChanged(auth, async (user) => {
-    const navAuth = document.getElementById('navAuth');
-    const userMenu = document.getElementById('userMenu');
+// Memantau Status Autentikasi Pengguna (Session Listener)
+supabase.auth.onAuthStateChange(async (event, session) => {
     const btnOpenAuth = document.getElementById('btnOpenAuth');
-    
-    if (user) {
-        if (user.emailVerified) {
-            currentUser = user;
-            document.getElementById('userDisplayEmail').innerText = user.email;
-            btnOpenAuth.classList.add('hidden');
-            userMenu.classList.remove('hidden');
-            document.getElementById('profEmail').value = user.email;
-            await loadAudioList(user.uid);
-        } else {
-            alert("Harap verifikasi email Anda! Link verifikasi telah dikirim ke kotak masuk Anda.");
-            await signOut(auth);
-            resetAuthUI();
-        }
+    const userMenu = document.getElementById('userMenu');
+
+    if (session && session.user) {
+        currentUser = session.user;
+        document.getElementById('userDisplayEmail').innerText = currentUser.email;
+        btnOpenAuth.classList.add('hidden');
+        userMenu.classList.remove('hidden');
+        document.getElementById('profEmail').value = currentUser.email;
+        await loadAudioList();
     } else {
         currentUser = null;
         resetAuthUI();
@@ -126,40 +103,44 @@ function updateRuleUI(id, isValid) {
     }
 }
 
-// Sistem Pendaftaran Akun
+// Sistem Pendaftaran Akun Supabase
 document.getElementById('registerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('regEmail').value;
     const password = document.getElementById('regPassword').value;
 
-    // Otomatis menghilangkan/mengosongkan isi input setelah disubmit
     clearRegisterInputs();
 
-    try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await sendEmailVerification(userCredential.user);
-        alert("Pendaftaran berhasil! Silakan cek kotak masuk/spam email Anda untuk melakukan verifikasi sebelum login.");
+    const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: password
+    });
+
+    if (error) {
+        alert("Gagal mendaftar: " + error.message);
+    } else {
+        alert("Pendaftaran berhasil! Silakan cek inbox email Anda untuk melakukan verifikasi sebelum login.");
         closeModal('authModal');
-        await signOut(auth);
-    } catch (err) {
-        alert("Gagal mendaftar: " + err.message);
     }
 });
 
-// Sistem Login Akun
+// Sistem Login Akun Supabase
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
 
-    // Otomatis menghilangkan/mengosongkan isi input setelah disubmit
     clearLoginInputs();
 
-    try {
-        await signInWithEmailAndPassword(auth, email, password);
+    const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password
+    });
+
+    if (error) {
+        alert("Gagal masuk: " + error.message + ". Pastikan email sudah diverifikasi.");
+    } else {
         closeModal('authModal');
-    } catch (err) {
-        alert("Gagal masuk: Email/Password salah atau belum terverifikasi.");
     }
 });
 
@@ -171,53 +152,53 @@ window.togglePasswordVisibility = function(id) {
 
 // Proses Mengubah Password di Profil
 window.updateProfilePassword = async function() {
-    const curPwd = document.getElementById('profCurrentPassword').value;
+    const curPwd = document.getElementById('profCurrentPassword').value; // Supabase tidak wajib re-auth untuk ganti pwd lewat updateUser
     const newPwd = document.getElementById('profNewPassword').value;
     const confNewPwd = document.getElementById('profConfirmNewPassword').value;
 
-    if(newPwd !== confNewPwd) return alert("Konfirmasi password baru tidak cocok.");
+    if (newPwd !== confNewPwd) return alert("Konfirmasi password baru tidak cocok.");
 
-    try {
-        const credential = EmailAuthProvider.credential(currentUser.email, curPwd);
-        await reauthenticateWithCredential(currentUser, credential);
-        await updatePassword(currentUser, newPwd);
+    const { data, error } = await supabase.auth.updateUser({
+        password: newPwd
+    });
+
+    if (error) {
+        alert("Gagal memperbarui password: " + error.message);
+    } else {
         alert("Password berhasil diperbarui!");
-        
-        // Kosongkan field input password di profil setelah sukses
         document.getElementById('profCurrentPassword').value = "";
         document.getElementById('profNewPassword').value = "";
         document.getElementById('profConfirmNewPassword').value = "";
-        
         closeModal('profileModal');
-    } catch (err) {
-        alert("Gagal memperbarui: " + err.message);
     }
 }
 
 // Log Out Akun
-window.triggerLogout = function() {
+window.triggerLogout = async function() {
     if (confirm("Apakah Anda yakin ingin keluar dari aplikasi Audio Cutter?")) {
-        signOut(auth);
+        await supabase.auth.signOut();
     }
 }
 
-// Hapus Akun & List Audionya secara Permanen
+// Hapus Akun & Seluruh Objek Audio di Storage secara Permanen
 window.triggerDeleteAccount = async function() {
-    const pwdVerify = prompt("Untuk menghapus akun beserta seluruh data potongan audio secara permanen, harap masukkan password konfirmasi Anda:");
-    if (!pwdVerify) return;
+    const pwdVerify = prompt("Ketik 'HAPUS AKUN' untuk mengonfirmasi penghapusan akun beserta semua file audio Anda:");
+    if (pwdVerify !== 'HAPUS AKUN') return;
 
-    try {
-        const credential = EmailAuthProvider.credential(currentUser.email, pwdVerify);
-        await reauthenticateWithCredential(currentUser, credential);
-        
-        // Hapus dokumen database list audio user di Firestore
-        await setDoc(doc(db, "user_tracks", currentUser.uid), { tracks: [] });
-        await deleteUser(currentUser);
-        alert("Akun Anda telah berhasil dihapus secara permanen.");
-        closeModal('profileModal');
-    } catch (err) {
-        alert("Verifikasi gagal: " + err.message);
+    // Ambil list file di folder user terlebih dahulu
+    const folderPath = `${currentUser.id}/`;
+    const { data: files } = await supabase.storage.from('audio-tracks').list(currentUser.id);
+
+    if (files && files.length > 0) {
+        const filesToRemove = files.map(f => `${folderPath}${f.name}`);
+        await supabase.storage.from('audio-tracks').remove(filesToRemove);
     }
+
+    // Catatan: Penghapusan user auth secara penuh di Supabase idealnya memerlukan service_role / Edge Function,
+    // Di sisi client, kita akan memaksa user log out setelah membersihkan file storagenya.
+    alert("Data file audio Anda berhasil dibersihkan. Anda akan otomatis keluar.");
+    await supabase.auth.signOut();
+    closeModal('profileModal');
 }
 
 // ================= LOGIKA UTAMA: AUDIO PROCESSING (CUTTER) =================
@@ -231,7 +212,6 @@ window.checkAuthAndOpenCutter = function() {
     }
 }
 
-// Membaca input file ke Visualizer Audio Custom
 window.handleAudioUpload = function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -252,7 +232,6 @@ window.handleAudioUpload = function(e) {
 function initWaveSurfer(file) {
     if (window.wavesurfer) window.wavesurfer.destroy();
 
-    // Inisialisasi visualizer audio dari Wavesurfer.js versi terbaru
     window.wavesurfer = WaveSurfer.create({
         container: '#waveform',
         waveColor: '#444455',
@@ -279,11 +258,12 @@ window.togglePlay = function() {
     icon.className = window.wavesurfer.isPlaying() ? 'fas fa-pause' : 'fas fa-play';
 }
 
-// Proses Pemotongan Menggunakan AudioContext internal (Klien Sisi) Tanpa Server Eksternal
+// Proses Pemotongan dan Mengunggah Hasil Langsung ke Supabase Storage
 window.processAudioCut = async function() {
     const start = parseFloat(document.getElementById('startTime').value);
     const end = parseFloat(document.getElementById('endTime').value);
-    const name = document.getElementById('cutFileName').value || "hasil_potongan";
+    let name = document.getElementById('cutFileName').value || "hasil_potongan";
+    name = name.replace(/\s+/g, '_'); // Hindari spasi di nama file storage
 
     if (start >= end) return alert("Waktu mulai harus lebih kecil dari waktu selesai.");
 
@@ -303,59 +283,65 @@ window.processAudioCut = async function() {
         }
     }
 
-    // Ubah hasil potongan menjadi WAV format string base64 untuk disimpan langsung di Firestore
     const wavBlob = bufferToWavBlob(newBuffer);
-    const reader = new FileReader();
-    reader.readAsDataURL(wavBlob);
-    reader.onloadend = async function() {
-        const base64Audio = reader.result;
-        
-        // Simpan data track ke cloud riwayat pengguna
-        const trackData = {
-            id: Date.now().toString(),
-            name: name + ".wav",
-            audioData: base64Audio,
-            timestamp: new Date().toLocaleDateString()
-        };
+    const fileName = `${name}_${Date.now()}.wav`;
+    const filePath = `${currentUser.id}/${fileName}`;
 
-        try {
-            const userDocRef = doc(db, "user_tracks", currentUser.uid);
-            const docSnap = await getDoc(userDocRef);
-            if (!docSnap.exists()) {
-                await setDoc(userDocRef, { tracks: [trackData] });
-            } else {
-                await updateDoc(userDocRef, { tracks: arrayUnion(trackData) });
-            }
-            alert("Audio berhasil dipotong dan disimpan ke daftar beranda!");
-            closeModal('cutterModal');
-            // Reset workspace
-            document.getElementById('uploadZone').classList.remove('hidden');
-            document.getElementById('cutterWorkspace').classList.add('hidden');
-            await loadAudioList(currentUser.uid);
-        } catch (err) {
-            alert("Gagal menyimpan hasil: " + err.message);
-        }
-    };
+    // Unggah file blob audio biner asli ke Supabase Storage Bucket
+    const { data, error } = await supabase.storage
+        .from('audio-tracks')
+        .upload(filePath, wavBlob, {
+            contentType: 'audio/wav',
+            upsert: true
+        });
+
+    if (error) {
+        alert("Gagal mengunggah hasil potongan: " + error.message);
+    } else {
+        alert("Audio berhasil dipotong dan diunggah ke cloud!");
+        closeModal('cutterModal');
+        document.getElementById('uploadZone').classList.remove('hidden');
+        document.getElementById('cutterWorkspace').classList.add('hidden');
+        await loadAudioList();
+    }
 }
 
-// Ambil Riwayat Pemotongan Audio dari Database Firestore ke Beranda
-async function loadAudioList(uid) {
+// Membaca daftar file audio dari folder Storage milik user ke Beranda
+async function loadAudioList() {
     const audioListDiv = document.getElementById('audioList');
-    const docSnap = await getDoc(doc(db, "user_tracks", uid));
+    
+    // List file dari folder berdasarkan UID user yang sedang login
+    const { data: files, error } = await supabase.storage
+        .from('audio-tracks')
+        .list(currentUser.id, {
+            sortBy: { column: 'created_at', order: 'desc' }
+        });
 
-    if (docSnap.exists() && docSnap.data().tracks.length > 0) {
+    if (error) {
+        audioListDiv.innerHTML = '<p class="empty-msg">Gagal memuat daftar audio.</p>';
+        return;
+    }
+
+    if (files && files.length > 0) {
         audioListDiv.innerHTML = "";
-        docSnap.data().tracks.forEach(track => {
+        files.forEach(file => {
+            // Dapatkan URL publik dari file audio terkait
+            const { data: urlData } = supabase.storage
+                .from('audio-tracks')
+                .getPublicUrl(`${currentUser.id}/${file.name}`);
+
+            const createdDate = new Date(file.created_at).toLocaleDateString();
+
             const item = document.createElement('div');
             item.className = "audio-item";
             item.innerHTML = `
                 <div>
-                    <strong>${track.name}</strong> <br>
-                    <small style="color: #888;">Dibuat: ${track.timestamp}</small>
+                    <strong>${file.name.split('_')[0]}.wav</strong> <br>
+                    <small style="color: #888;">Dibuat: ${createdDate}</small>
                 </div>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <audio src="${track.audioData}" controls style="height:35px;"></audio>
-                    <button onclick="deleteTrack('${track.id}')" class="btn-danger" style="padding: 5px 10px;"><i class="fas fa-trash"></i></button>
+                    <audio src="${urlData.publicUrl}" controls style="height:35px;"></audio>
+                    <button onclick="deleteTrack('${file.name}')" class="btn-danger" style="padding: 5px 10px;"><i class="fas fa-trash"></i></button>
                 </div>
             `;
             audioListDiv.appendChild(item);
@@ -365,28 +351,20 @@ async function loadAudioList(uid) {
     }
 }
 
-// Menghapus Item Tertentu dari Daftar Beranda dengan Konfirmasi Password
-window.deleteTrack = async function(trackId) {
-    const pwdVerify = prompt("Masukkan password akun Anda untuk mengonfirmasi penghapusan file audio ini:");
-    if (!pwdVerify) return;
+// Menghapus spesifik satu file audio dari Storage
+window.deleteTrack = async function(fileName) {
+    if (!confirm("Apakah Anda yakin ingin menghapus potongan audio ini?")) return;
 
-    try {
-        const credential = EmailAuthProvider.credential(currentUser.email, pwdVerify);
-        await reauthenticateWithCredential(currentUser, credential);
+    const filePath = `${currentUser.id}/${fileName}`;
+    const { data, error } = await supabase.storage
+        .from('audio-tracks')
+        .remove([filePath]);
 
-        const userDocRef = doc(db, "user_tracks", currentUser.uid);
-        const docSnap = await getDoc(userDocRef);
-        
-        if (docSnap.exists()) {
-            const trackToDelete = docSnap.data().tracks.find(t => t.id === trackId);
-            if (trackToDelete) {
-                await updateDoc(userDocRef, { tracks: arrayRemove(trackToDelete) });
-                alert("File berhasil dihapus.");
-                await loadAudioList(currentUser.uid);
-            }
-        }
-    } catch(err) {
-        alert("Konfirmasi gagal: Password salah!");
+    if (error) {
+        alert("Gagal menghapus file: " + error.message);
+    } else {
+        alert("File audio berhasil dihapus.");
+        await loadAudioList();
     }
 }
 
