@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Cutter</title>
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/wavesurfer.js"></script>
+</head>
+<body>
+
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-brand">Audio Cutter <span class="wm">by Daus XD</span></div>
+        <div class="nav-auth" id="navAuth">
+            <button id="btnOpenAuth" onclick="openModal('authModal')"><i class="fas fa-sign-in-alt"></i> Masuk / Daftar</button>
+            <div id="userMenu" class="user-menu hidden">
+                <span id="userDisplayEmail"></span>
+                <button onclick="openModal('profileModal')"><i class="fas fa-user"></i> Profil</button>
+                <button onclick="triggerLogout()" class="btn-danger"><i class="fas fa-sign-out-alt"></i> Keluar</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="hero-section">
+            <button id="btnOpenCutter" class="btn-primary main-cutter-btn" onclick="checkAuthAndOpenCutter()">
+                <i class="fas fa-scissors"></i> Potong Audio Sekarang
+            </button>
+        </div>
+
+        <section class="list-section">
+            <h2><i class="fas fa-list"></i> Riwayat Potongan Audio Anda</h2>
+            <div id="audioList" class="audio-list">
+                <p class="empty-msg">Belum ada riwayat potongan audio atau Anda belum login.</p>
+            </div>
+        </section>
+    </main>
+
+    <div id="authModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('authModal')">&times;</span>
+            <div class="tab-container">
+                <button id="tabLogin" class="tab-btn active" onclick="switchTab('login')">Masuk</button>
+                <button id="tabRegister" class="tab-btn" onclick="switchTab('register')">Daftar</button>
+            </div>
+
+            <form id="loginForm" class="auth-form animate-fade">
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" required placeholder="Masukkan email...">
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" required placeholder="Masukkan password...">
+                </div>
+                <button type="submit" class="btn-submit">Masuk</button>
+            </form>
+
+            <form id="registerForm" class="auth-form hidden animate-fade">
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="regEmail" required placeholder="Masukkan email...">
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="regPassword" required placeholder="Buat password..." oninput="validateRegisterPassword()">
+                </div>
+                <div class="input-group">
+                    <label>Konfirmasi Password</label>
+                    <input type="password" id="regConfirmPassword" required placeholder="Ulangi password..." oninput="validateRegisterPassword()">
+                </div>
+                
+                <div class="password-rules">
+                    <p id="ruleLength" class="rule"><i class="fas fa-times-circle"></i> 7 - 12 Karakter</p>
+                    <p id="ruleCaps" class="rule"><i class="fas fa-times-circle"></i> 1 Huruf Besar</p>
+                    <p id="ruleSymbol" class="rule"><i class="fas fa-times-circle"></i> Mengandung simbol (# * . _)</p>
+                    <p id="ruleMatch" class="rule"><i class="fas fa-times-circle"></i> Password Cocok</p>
+                </div>
+                <button type="submit" id="btnSubmitRegister" class="btn-submit" disabled>Daftar Akun</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="profileModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('profileModal')">&times;</span>
+            <h2><i class="fas fa-user-cog"></i> Info Profil</h2>
+            <div class="input-group">
+                <label>Email (Tidak dapat diubah)</label>
+                <input type="text" id="profEmail" readonly class="input-readonly">
+            </div>
+            <hr class="neon-line">
+            <h3>Ubah Password</h3>
+            <div class="input-group">
+                <label>Password Saat Ini</label>
+                <div class="password-wrapper">
+                    <input type="password" id="profCurrentPassword" placeholder="Masukkan password sekarang...">
+                    <button type="button" class="toggle-pwd" onclick="togglePasswordVisibility('profCurrentPassword')"><i class="fas fa-eye"></i></button>
+                </div>
+            </div>
+            <div class="input-group">
+                <label>Password Baru</label>
+                <input type="password" id="profNewPassword" placeholder="Masukkan password baru...">
+            </div>
+            <div class="input-group">
+                <label>Konfirmasi Password Baru</label>
+                <input type="password" id="profConfirmNewPassword" placeholder="Ulangi password baru...">
+            </div>
+            <button onclick="updateProfilePassword()" class="btn-submit">Perbarui Password</button>
+            
+            <hr class="neon-line">
+            <button onclick="triggerDeleteAccount()" class="btn-danger btn-block"><i class="fas fa-trash-alt"></i> Hapus Akun Saya</button>
+        </div>
+    </div>
+
+    <div id="cutterModal" class="modal hidden">
+        <div class="modal-content modal-lg">
+            <span class="close-btn" onclick="closeModal('cutterModal')">&times;</span>
+            <h2><i class="fas fa-scissors"></i> Unggah & Potong Audio</h2>
+            
+            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('audioFileInput').click()">
+                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                <p>Klik atau Seret file audio di sini (MP3, WAV, M4A)</p>
+                <input type="file" id="audioFileInput" accept="audio/*" class="hidden" onchange="handleAudioUpload(event)">
+            </div>
+
+            <div id="cutterWorkspace" class="cutter-workspace hidden">
+                <div id="waveform"></div> <div class="player-controls">
+                    <button onclick="wavesurfer.skipBackward(5)" class="btn-ctrl"><i class="fas fa-backward"></i></button>
+                    <button id="btnPlayPause" onclick="togglePlay()" class="btn-ctrl play-btn"><i class="fas fa-play"></i></button>
+                    <button onclick="wavesurfer.skipForward(5)" class="btn-ctrl"><i class="fas fa-forward"></i></button>
+                </div>
+
+                <div class="time-inputs">
+                    <div class="time-group">
+                        <label>Waktu Mulai (detik)</label>
+                        <input type="number" step="0.1" id="startTime" value="0" onchange="updateRegionsFromInput()">
+                    </div>
+                    <div class="time-group">
+                        <label>Waktu Selesai (detik)</label>
+                        <input type="number" step="0.1" id="endTime" value="10" onchange="updateRegionsFromInput()">
+                    </div>
+                </div>
+
+                <div class="input-group" style="margin-top: 15px;">
+                    <label>Nama File Hasil Potongan</label>
+                    <input type="text" id="cutFileName" placeholder="contoh: potongan_lagu_baru">
+                </div>
+
+                <button onclick="processAudioCut()" class="btn-submit btn-block"><i class="fas fa-cut"></i> Proses Pemotongan & Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2026 Audio Cutter | Elegant Design <span class="watermark">by Daus XD</span></p>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
