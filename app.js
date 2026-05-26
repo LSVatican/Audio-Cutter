@@ -28,11 +28,23 @@ let currentUser = null;
 window.wavesurfer = null;
 let audioBuffer = null;
 
-// Tampilkan/Sembunyikan Loader
-function showLoading(show) {
-    const loader = document.getElementById('loadingOverlay');
-    if (show) loader.classList.remove('hidden');
-    else loader.classList.add('hidden');
+// Fungsi helper untuk mengosongkan form pendaftaran
+function clearRegisterInputs() {
+    document.getElementById('regEmail').value = "";
+    document.getElementById('regPassword').value = "";
+    document.getElementById('regConfirmPassword').value = "";
+    // Reset indikator peraturan password ke default (merah/silang)
+    updateRuleUI('ruleLength', false);
+    updateRuleUI('ruleCaps', false);
+    updateRuleUI('ruleSymbol', false);
+    updateRuleUI('ruleMatch', false);
+    document.getElementById('btnSubmitRegister').disabled = true;
+}
+
+// Fungsi helper untuk mengosongkan form login
+function clearLoginInputs() {
+    document.getElementById('loginEmail').value = "";
+    document.getElementById('loginPassword').value = "";
 }
 
 // Manajemen Modal secara global
@@ -41,7 +53,6 @@ window.closeModal = function(id) { document.getElementById(id).classList.add('hi
 
 // Autentikasi Menggunakan State Listener
 onAuthStateChanged(auth, async (user) => {
-    showLoading(true);
     const navAuth = document.getElementById('navAuth');
     const userMenu = document.getElementById('userMenu');
     const btnOpenAuth = document.getElementById('btnOpenAuth');
@@ -63,7 +74,6 @@ onAuthStateChanged(auth, async (user) => {
         currentUser = null;
         resetAuthUI();
     }
-    showLoading(false);
 });
 
 function resetAuthUI() {
@@ -119,9 +129,11 @@ function updateRuleUI(id, isValid) {
 // Sistem Pendaftaran Akun
 document.getElementById('registerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    showLoading(true);
     const email = document.getElementById('regEmail').value;
     const password = document.getElementById('regPassword').value;
+
+    // Otomatis menghilangkan/mengosongkan isi input setelah disubmit
+    clearRegisterInputs();
 
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -131,22 +143,24 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         await signOut(auth);
     } catch (err) {
         alert("Gagal mendaftar: " + err.message);
-    } finally { showLoading(false); }
+    }
 });
 
 // Sistem Login Akun
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    showLoading(true);
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
+
+    // Otomatis menghilangkan/mengosongkan isi input setelah disubmit
+    clearLoginInputs();
 
     try {
         await signInWithEmailAndPassword(auth, email, password);
         closeModal('authModal');
     } catch (err) {
         alert("Gagal masuk: Email/Password salah atau belum terverifikasi.");
-    } finally { showLoading(false); }
+    }
 });
 
 // Fitur Sembunyikan & Tampilkan Password
@@ -162,17 +176,22 @@ window.updateProfilePassword = async function() {
     const confNewPwd = document.getElementById('profConfirmNewPassword').value;
 
     if(newPwd !== confNewPwd) return alert("Konfirmasi password baru tidak cocok.");
-    showLoading(true);
 
     try {
         const credential = EmailAuthProvider.credential(currentUser.email, curPwd);
         await reauthenticateWithCredential(currentUser, credential);
         await updatePassword(currentUser, newPwd);
         alert("Password berhasil diperbarui!");
+        
+        // Kosongkan field input password di profil setelah sukses
+        document.getElementById('profCurrentPassword').value = "";
+        document.getElementById('profNewPassword').value = "";
+        document.getElementById('profConfirmNewPassword').value = "";
+        
         closeModal('profileModal');
     } catch (err) {
         alert("Gagal memperbarui: " + err.message);
-    } finally { showLoading(false); }
+    }
 }
 
 // Log Out Akun
@@ -186,7 +205,6 @@ window.triggerLogout = function() {
 window.triggerDeleteAccount = async function() {
     const pwdVerify = prompt("Untuk menghapus akun beserta seluruh data potongan audio secara permanen, harap masukkan password konfirmasi Anda:");
     if (!pwdVerify) return;
-    showLoading(true);
 
     try {
         const credential = EmailAuthProvider.credential(currentUser.email, pwdVerify);
@@ -199,7 +217,7 @@ window.triggerDeleteAccount = async function() {
         closeModal('profileModal');
     } catch (err) {
         alert("Verifikasi gagal: " + err.message);
-    } finally { showLoading(false); }
+    }
 }
 
 // ================= LOGIKA UTAMA: AUDIO PROCESSING (CUTTER) =================
@@ -219,7 +237,6 @@ window.handleAudioUpload = function(e) {
     if (!file) return;
     
     document.getElementById('cutFileName').value = file.name.split('.')[0] + "_cut";
-    showLoading(true);
 
     const reader = new FileReader();
     reader.onload = function(evt) {
@@ -247,7 +264,6 @@ function initWaveSurfer(file) {
     window.wavesurfer.loadBlob(file);
     
     window.wavesurfer.on('ready', () => {
-        showLoading(false);
         document.getElementById('uploadZone').classList.add('hidden');
         document.getElementById('cutterWorkspace').classList.remove('hidden');
         
@@ -270,7 +286,6 @@ window.processAudioCut = async function() {
     const name = document.getElementById('cutFileName').value || "hasil_potongan";
 
     if (start >= end) return alert("Waktu mulai harus lebih kecil dari waktu selesai.");
-    showLoading(true);
 
     const sampleRate = audioBuffer.sampleRate;
     const startOffset = start * sampleRate;
@@ -319,7 +334,7 @@ window.processAudioCut = async function() {
             await loadAudioList(currentUser.uid);
         } catch (err) {
             alert("Gagal menyimpan hasil: " + err.message);
-        } finally { showLoading(false); }
+        }
     };
 }
 
@@ -354,7 +369,6 @@ async function loadAudioList(uid) {
 window.deleteTrack = async function(trackId) {
     const pwdVerify = prompt("Masukkan password akun Anda untuk mengonfirmasi penghapusan file audio ini:");
     if (!pwdVerify) return;
-    showLoading(true);
 
     try {
         const credential = EmailAuthProvider.credential(currentUser.email, pwdVerify);
@@ -373,7 +387,7 @@ window.deleteTrack = async function(trackId) {
         }
     } catch(err) {
         alert("Konfirmasi gagal: Password salah!");
-    } finally { showLoading(false); }
+    }
 }
 
 // Helper: Mengubah Audio Buffer Menjadi Blob file .WAV standard
